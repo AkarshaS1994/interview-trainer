@@ -5,6 +5,7 @@ import { MCQBlock } from "../components/MCQBlock.jsx";
 import { VoiceInput } from "../components/VoiceInput.jsx";
 import { scoreStep } from "../engine/scorer.js";
 import { computeBadgesToAward } from "../engine/badges.js";
+import { ALL_PROBLEMS } from "../data/index.js";
 
 export function ProblemScreen({ problem, simMode, state, onComplete, onBack, onAward, onXP, onToast }) {
   const [phase, setPhase] = useState("clarify");
@@ -105,7 +106,7 @@ export function ProblemScreen({ problem, simMode, state, onComplete, onBack, onA
       const newBadges = computeBadgesToAward(state, {
         problemComplete: true, finalPct: pct, problem, scores: allScores,
         completed: state.completed, daysPracticed: state.daysPracticed,
-        simMode, allProblems: null,
+        simMode, allProblems: ALL_PROBLEMS,
       });
       newBadges.forEach(b => onAward(b));
       onComplete(problem.id, pct, allScores);
