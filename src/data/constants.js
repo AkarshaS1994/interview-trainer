@@ -27,3 +27,36 @@ export const LEVEL_GATES = {
 };
 
 export const STORAGE_KEY = "interview_trainer_v4";
+
+export const DSA_TAXONOMY = [
+  {
+    id: "ds",
+    label: "Data Structures",
+    emoji: "🏗️",
+    color: "#6366f1",
+    description: "How data is organized and accessed in memory",
+    types: [
+      { id: "arrays",      label: "Arrays",       emoji: "📋", patterns: ["Arrays", "Sliding Window", "Two Pointers"], description: "Contiguous memory · sliding window · two-pointer techniques" },
+      { id: "linked-list", label: "Linked List",   emoji: "🔗", patterns: ["Linked List"],               description: "Nodes with pointers · fast insert/delete · runner technique" },
+      { id: "stack-queue", label: "Stack & Queue", emoji: "📚", patterns: ["Stack / Queue"],              description: "LIFO/FIFO · monotonic stack · BFS queue patterns" },
+      { id: "trees",       label: "Trees",         emoji: "🌳", patterns: ["Trees"],                      description: "Hierarchical · BST · DFS/BFS · path problems · serialization" },
+      { id: "graphs",      label: "Graphs",        emoji: "🕸️", patterns: ["Graphs", "Union-Find"],       description: "Nodes & edges · BFS/DFS · topological sort · connected components" },
+      { id: "heap",        label: "Heap",          emoji: "⛰️", patterns: ["Heap"],                      description: "Priority queue · top-K elements · streaming median · merge K" },
+      { id: "trie",        label: "Trie",          emoji: "🌲", patterns: ["Trie"],                       description: "Prefix tree · autocomplete · word search · IP routing" },
+    ],
+  },
+  {
+    id: "algo",
+    label: "Algorithms",
+    emoji: "⚡",
+    color: "#f59e0b",
+    description: "Techniques for solving problems efficiently",
+    types: [
+      { id: "binary-search", label: "Binary Search",       emoji: "🔍", patterns: ["Binary Search"], description: "Logarithmic search · sorted arrays · search spaces · monotonic functions" },
+      { id: "dp",            label: "Dynamic Programming", emoji: "📊", patterns: ["DP"],            description: "Overlapping subproblems · memoization · bottom-up tables · optimal substructure" },
+      { id: "greedy",        label: "Greedy",              emoji: "💰", patterns: ["Greedy", "Intervals"], description: "Local optimal choice · interval scheduling · activity selection" },
+      { id: "backtracking",  label: "Backtracking",        emoji: "🔄", patterns: ["Backtracking"],  description: "Exhaustive search with pruning · subsets · permutations · constraint satisfaction" },
+      { id: "bit-manip",     label: "Bit Manipulation",    emoji: "💡", patterns: ["Bit Manipulation"], description: "XOR tricks · bit masking · Hamming weight · single number" },
+    ],
+  },
+];

@@ -1,30 +1,27 @@
 import { useState } from "react";
 import { ProgressBar } from "../components/ProgressBar.jsx";
 import { BADGES } from "../data/badges.js";
-import { PATTERNS } from "../data/constants.js";
+import { DSA_TAXONOMY } from "../data/constants.js";
 import { computeLevel } from "../engine/levels.js";
 import { getDueForReview } from "../engine/spacedRep.js";
 
 const DIFF_COLOR = { Easy: "#22c55e", Medium: "#f59e0b", Hard: "#ef4444" };
 const DIFF_BG    = { Easy: "#052e16", Medium: "#1c1400", Hard: "#1c0000" };
 
+// Initial browse state
+const HOME = { level: "home", category: null, type: null, pattern: null };
+
 export function HomeScreen({ state, problems, onStart }) {
-  const [tab, setTab] = useState("problems");
+  const [tab, setTab]           = useState("problems");
   const [filterDiff, setFilterDiff] = useState("All");
-  const [filterPattern, setFilterPattern] = useState("All");
+  const [browse, setBrowse]     = useState(HOME);
 
   const { xp, badges, completed, patternStats, daysPracticed, stepStreak } = state;
-  const lvl = computeLevel(xp);
-  const due = getDueForReview(completed, problems);
+  const lvl  = computeLevel(xp);
+  const due  = getDueForReview(completed, problems);
+  const unlocked = problems.filter(p => lvl.unlockedDifficulties.includes(p.difficulty));
 
   const patternList = [...new Set(problems.map(p => p.pattern))].sort();
-
-  // Only show problems unlocked at current level
-  const unlocked = problems.filter(p => lvl.unlockedDifficulties.includes(p.difficulty));
-  const filtered = unlocked.filter(p =>
-    (filterDiff === "All" || p.difficulty === filterDiff) &&
-    (filterPattern === "All" || p.pattern === filterPattern)
-  );
 
   const weakestPattern = (() => {
     let worst = null, worstAcc = 2;
@@ -34,6 +31,327 @@ export function HomeScreen({ state, problems, onStart }) {
     return worst;
   })();
 
+  // Find a pattern in the taxonomy and navigate to it
+  const navigateToPattern = (pattern) => {
+    for (const cat of DSA_TAXONOMY) {
+      for (const type of cat.types) {
+        if (type.patterns.includes(pattern)) {
+          setBrowse({ level: "problems", category: cat, type, pattern });
+          setFilterDiff("All");
+          return;
+        }
+      }
+    }
+  };
+
+  const goBack = () => {
+    if (browse.level === "problems") {
+      const multiPattern = browse.type && browse.type.patterns.length > 1;
+      setBrowse(multiPattern
+        ? { ...browse, level: "pattern", pattern: null }
+        : { ...browse, level: "type", type: null, pattern: null }
+      );
+    } else if (browse.level === "pattern") {
+      setBrowse({ ...browse, level: "type", type: null, pattern: null });
+    } else if (browse.level === "type") {
+      setBrowse(HOME);
+    }
+  };
+
+  const selectType = (type) => {
+    if (type.patterns.length === 1) {
+      setBrowse({ ...browse, level: "problems", type, pattern: type.patterns[0] });
+    } else {
+      setBrowse({ ...browse, level: "pattern", type, pattern: null });
+    }
+    setFilterDiff("All");
+  };
+
+  const browsedProblems = browse.level === "problems"
+    ? unlocked.filter(p =>
+        p.pattern === browse.pattern &&
+        (filterDiff === "All" || p.difficulty === filterDiff)
+      )
+    : [];
+
+  // Count unlocked problems for a given set of patterns
+  const countFor = (patterns) => unlocked.filter(p => patterns.includes(p.pattern)).length;
+
+  // ── Shared banners ────────────────────────────────────────────────────────
+  const ReviewBanner = () => due.length === 0 ? null : (
+    <div style={{ background: "#1a1000", border: "1px solid #f59e0b30", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>📅 Due for Review</div>
+      <div style={{ fontSize: 13, color: "#e2e8f0", marginBottom: 8 }}>{due.length} problem{due.length > 1 ? "s" : ""} ready — spaced repetition</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {due.slice(0, 3).map(p => (
+          <button key={p.id} onClick={() => onStart(p)} style={{
+            background: "#f59e0b20", border: "1px solid #f59e0b40",
+            borderRadius: 8, padding: "5px 10px", color: "#f59e0b", fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>{p.title}</button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const LockedBanner = () => problems.length <= unlocked.length ? null : (
+    <div style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: "#475569" }}>
+        🔒 {lvl.level < 3 ? "Reach Level 3 to unlock Medium problems" : "Reach Level 5 to unlock Hard problems"}
+      </div>
+    </div>
+  );
+
+  // ── Back button ───────────────────────────────────────────────────────────
+  const BackRow = ({ label }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+      <button onClick={goBack} style={{
+        background: "#111118", border: "1px solid #1e1e2e", borderRadius: 8,
+        padding: "6px 12px", color: "#a5b4fc", fontSize: 12, fontWeight: 700, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 4,
+      }}>‹ {label}</button>
+      {browse.level === "problems" && browse.type && (
+        <span style={{ fontSize: 11, color: "#334155" }}>
+          {browse.category?.label} · {browse.type.label}
+        </span>
+      )}
+      {browse.level === "pattern" && (
+        <span style={{ fontSize: 11, color: "#334155" }}>
+          {browse.category?.label}
+        </span>
+      )}
+    </div>
+  );
+
+  // ── Level 1: Category cards ───────────────────────────────────────────────
+  const CategoryView = () => (
+    <div>
+      {weakestPattern && (
+        <div style={{ background: "#1a0a2e", border: "1px solid #6366f130", borderRadius: 12, padding: "12px 14px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#a78bfa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Recommended</div>
+            <div style={{ fontSize: 13, color: "#e2e8f0", marginTop: 2 }}>Practice <strong style={{ color: "#a5b4fc" }}>{weakestPattern}</strong></div>
+          </div>
+          <button onClick={() => navigateToPattern(weakestPattern)} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Go</button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {DSA_TAXONOMY.map(cat => {
+          const total = countFor(cat.types.flatMap(t => t.patterns));
+          const done  = cat.types.flatMap(t => t.patterns).reduce((acc, pat) =>
+            acc + unlocked.filter(p => p.pattern === pat && completed[p.id]).length, 0);
+          return (
+            <div key={cat.id} onClick={() => setBrowse({ level: "type", category: cat, type: null, pattern: null })}
+              style={{ background: "#111118", border: `1px solid ${cat.color}25`, borderRadius: 14, padding: "18px 16px", cursor: "pointer" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 22 }}>{cat.emoji}</span>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9" }}>{cat.label}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#475569", marginBottom: 10 }}>{cat.description}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {cat.types.map(t => (
+                      <span key={t.id} style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 5, background: `${cat.color}15`, color: cat.color }}>
+                        {t.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: cat.color }}>{total}</div>
+                  <div style={{ fontSize: 10, color: "#334155" }}>problems</div>
+                  <div style={{ fontSize: 10, color: "#22c55e", marginTop: 2 }}>{done} done</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <ProgressBar value={done} max={total} color={cat.color} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // ── Level 2: Type cards ───────────────────────────────────────────────────
+  const TypeView = () => (
+    <div>
+      <BackRow label="All Topics" />
+      <div style={{ fontSize: 20, fontWeight: 800, color: "#f1f5f9", marginBottom: 4 }}>
+        {browse.category.emoji} {browse.category.label}
+      </div>
+      <div style={{ fontSize: 12, color: "#475569", marginBottom: 16 }}>{browse.category.description}</div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {browse.category.types.map(type => {
+          const total  = countFor(type.patterns);
+          const done   = unlocked.filter(p => type.patterns.includes(p.pattern) && completed[p.id]).length;
+          const locked = problems.filter(p => type.patterns.includes(p.pattern)).length - total;
+          return (
+            <div key={type.id} onClick={() => selectType(type)}
+              style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 18 }}>{type.emoji}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9" }}>{type.label}</span>
+                    {locked > 0 && <span style={{ fontSize: 10, color: "#475569" }}>🔒 {locked} locked</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#475569" }}>{type.description}</div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: browse.category.color }}>{total}</div>
+                  <div style={{ fontSize: 9, color: "#334155" }}>problems</div>
+                </div>
+              </div>
+
+              {type.patterns.length > 1 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {type.patterns.map(pat => (
+                    <span key={pat} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, background: "#1e1e2e", color: "#818cf8", fontWeight: 600 }}>
+                      {pat} ({unlocked.filter(p => p.pattern === pat).length})
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <ProgressBar value={done} max={Math.max(total, 1)} color={browse.category.color} />
+                </div>
+                <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{done}/{total}</span>
+                <span style={{ fontSize: 16, color: "#2d2d4e" }}>›</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // ── Level 3: Pattern cards (only for types with multiple patterns) ─────────
+  const PatternView = () => {
+    const cat = browse.category;
+    const type = browse.type;
+    return (
+      <div>
+        <BackRow label={cat.label} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 20 }}>{type.emoji}</span>
+          <span style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9" }}>{type.label}</span>
+        </div>
+        <div style={{ fontSize: 12, color: "#475569", marginBottom: 16 }}>{type.description}</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {type.patterns.map(pat => {
+            const total = unlocked.filter(p => p.pattern === pat).length;
+            const done  = unlocked.filter(p => p.pattern === pat && completed[p.id]).length;
+            const diffs = ["Easy","Medium","Hard"].map(d => unlocked.filter(p => p.pattern === pat && p.difficulty === d).length);
+            return (
+              <div key={pat} onClick={() => { setBrowse({ ...browse, level: "problems", pattern: pat }); setFilterDiff("All"); }}
+                style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9" }}>{pat}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: cat.color }}>{total}</span>
+                    <span style={{ fontSize: 16, color: "#2d2d4e" }}>›</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  {[["Easy","#22c55e"],["Medium","#f59e0b"],["Hard","#ef4444"]].map(([d, c], i) => diffs[i] > 0 ? (
+                    <span key={d} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5, background: DIFF_BG[d], color: c }}>
+                      {d[0]} {diffs[i]}
+                    </span>
+                  ) : null)}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1 }}><ProgressBar value={done} max={Math.max(total, 1)} color={cat.color} /></div>
+                  <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{done}/{total}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Level 4: Problem list ─────────────────────────────────────────────────
+  const ProblemsView = () => {
+    const totalInPattern = unlocked.filter(p => p.pattern === browse.pattern).length;
+    const doneInPattern  = unlocked.filter(p => p.pattern === browse.pattern && completed[p.id]).length;
+    const isDue = (p) => due.find(x => x.id === p.id);
+    return (
+      <div>
+        <BackRow label={browse.type?.patterns.length > 1 ? browse.pattern : browse.type?.label || "Back"} />
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+            <span style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9" }}>{browse.pattern}</span>
+            <span style={{ fontSize: 12, color: "#475569" }}>{totalInPattern} problems</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1 }}><ProgressBar value={doneInPattern} max={Math.max(totalInPattern, 1)} color={browse.category?.color || "#6366f1"} /></div>
+            <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{doneInPattern}/{totalInPattern} done</span>
+          </div>
+        </div>
+
+        {/* Difficulty filter */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
+          {["All", "Easy", "Medium", "Hard"].map(d => (
+            <button key={d} onClick={() => setFilterDiff(d)} style={{
+              flexShrink: 0, padding: "6px 14px", borderRadius: 20, cursor: "pointer",
+              border: `1px solid ${filterDiff === d ? (DIFF_COLOR[d] || "#6366f1") : "#1e1e2e"}`,
+              background: filterDiff === d ? (DIFF_BG[d] || "#1a1a2e") : "#111118",
+              color: filterDiff === d ? (DIFF_COLOR[d] || "#a5b4fc") : "#475569",
+              fontSize: 12, fontWeight: 600,
+            }}>{d}</button>
+          ))}
+        </div>
+
+        {/* Problem list */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {browsedProblems.map(p => {
+            const done = completed[p.id];
+            const due_ = isDue(p);
+            return (
+              <div key={p.id} onClick={() => onStart(p)} style={{
+                background: "#111118",
+                border: `1px solid ${done ? (due_ ? "#f59e0b20" : "#22c55e20") : "#1a1a2e"}`,
+                borderRadius: 12, padding: "14px 16px", cursor: "pointer",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 5 }}>
+                      <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 15 }}>{p.title}</span>
+                      {done && <span style={{ fontSize: 11, color: done.score >= 80 ? "#22c55e" : "#f59e0b", fontWeight: 700 }}>✓ {done.score}%</span>}
+                      {due_ && <span style={{ fontSize: 10, color: "#f59e0b", background: "#1a1000", border: "1px solid #f59e0b40", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Review</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, background: DIFF_BG[p.difficulty], color: DIFF_COLOR[p.difficulty] }}>{p.difficulty}</span>
+                      {p.companies.slice(0, 2).map(c => <span key={c} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, background: "#0f1015", color: "#475569" }}>{c}</span>)}
+                    </div>
+                  </div>
+                  <span style={{ color: "#2d2d4e", fontSize: 18, marginLeft: 8 }}>›</span>
+                </div>
+              </div>
+            );
+          })}
+          {browsedProblems.length === 0 && (
+            <div style={{ textAlign: "center", padding: "32px 0", color: "#334155", fontSize: 14 }}>
+              No {filterDiff !== "All" ? filterDiff : ""} problems unlocked here yet.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background: "#07070f", minHeight: "100vh", color: "#e2e8f0", fontFamily: "system-ui,sans-serif", paddingBottom: 80 }}>
       {/* Header */}
@@ -80,107 +398,13 @@ export function HomeScreen({ state, problems, onStart }) {
 
         {/* ── PROBLEMS TAB ── */}
         {tab === "problems" && <>
-          {/* Spaced repetition banner */}
-          {due.length > 0 && (
-            <div style={{ background: "#1a1000", border: "1px solid #f59e0b30", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
-                📅 Due for Review
-              </div>
-              <div style={{ fontSize: 13, color: "#e2e8f0", marginBottom: 8 }}>
-                {due.length} problem{due.length > 1 ? "s" : ""} ready — spaced repetition
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {due.slice(0, 3).map(p => (
-                  <button key={p.id} onClick={() => onStart(p)} style={{
-                    background: "#f59e0b20", border: "1px solid #f59e0b40",
-                    borderRadius: 8, padding: "5px 10px", color: "#f59e0b", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}>{p.title}</button>
-                ))}
-              </div>
-            </div>
-          )}
+          <ReviewBanner />
+          <LockedBanner />
 
-          {/* Locked difficulty notice */}
-          {problems.length > unlocked.length && (
-            <div style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "#475569" }}>
-                🔒 {lvl.level < 3 ? "Reach Level 3 to unlock Medium problems" : "Reach Level 5 to unlock Hard problems"}
-              </div>
-            </div>
-          )}
-
-          {/* Weakest pattern suggestion */}
-          {weakestPattern && (
-            <div style={{ background: "#1a0a2e", border: "1px solid #6366f130", borderRadius: 12, padding: "12px 14px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 11, color: "#a78bfa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Recommended</div>
-                <div style={{ fontSize: 13, color: "#e2e8f0", marginTop: 2 }}>Practice <strong style={{ color: "#a5b4fc" }}>{weakestPattern}</strong></div>
-              </div>
-              <button onClick={() => setFilterPattern(weakestPattern)} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Filter</button>
-            </div>
-          )}
-
-          {/* Difficulty filters */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto", paddingBottom: 4 }}>
-            {["All", "Easy", "Medium", "Hard"].map(d => (
-              <button key={d} onClick={() => setFilterDiff(d)} style={{
-                flexShrink: 0, padding: "6px 14px", borderRadius: 20, cursor: "pointer",
-                border: `1px solid ${filterDiff === d ? (DIFF_COLOR[d] || "#6366f1") : "#1e1e2e"}`,
-                background: filterDiff === d ? (DIFF_BG[d] || "#1a1a2e") : "#111118",
-                color: filterDiff === d ? (DIFF_COLOR[d] || "#a5b4fc") : "#475569",
-                fontSize: 12, fontWeight: 600,
-              }}>{d}</button>
-            ))}
-          </div>
-
-          {/* Pattern filters */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
-            {["All", ...patternList].map(p => (
-              <button key={p} onClick={() => setFilterPattern(p)} style={{
-                flexShrink: 0, padding: "6px 12px", borderRadius: 20, cursor: "pointer",
-                border: `1px solid ${filterPattern === p ? "#6366f1" : "#1e1e2e"}`,
-                background: filterPattern === p ? "#1a1a2e" : "#111118",
-                color: filterPattern === p ? "#a5b4fc" : "#475569",
-                fontSize: 11, fontWeight: 600,
-              }}>{p}</button>
-            ))}
-          </div>
-
-          {/* Problem list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filtered.map(p => {
-              const done = completed[p.id];
-              const isDue = due.find(x => x.id === p.id);
-              return (
-                <div key={p.id} onClick={() => onStart(p)} style={{
-                  background: "#111118",
-                  border: `1px solid ${done ? (isDue ? "#f59e0b20" : "#22c55e20") : "#1a1a2e"}`,
-                  borderRadius: 12, padding: "14px 16px", cursor: "pointer",
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 5 }}>
-                        <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 15 }}>{p.title}</span>
-                        {done && <span style={{ fontSize: 11, color: done.score >= 80 ? "#22c55e" : "#f59e0b", fontWeight: 700 }}>✓ {done.score}%</span>}
-                        {isDue && <span style={{ fontSize: 10, color: "#f59e0b", background: "#1a1000", border: "1px solid #f59e0b40", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Review</span>}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, background: DIFF_BG[p.difficulty], color: DIFF_COLOR[p.difficulty] }}>{p.difficulty}</span>
-                        <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 5, background: "#1e1e3e", color: "#818cf8" }}>{p.pattern}</span>
-                        {p.companies.slice(0, 2).map(c => <span key={c} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, background: "#0f1015", color: "#475569" }}>{c}</span>)}
-                      </div>
-                    </div>
-                    <span style={{ color: "#2d2d4e", fontSize: 18, marginLeft: 8 }}>›</span>
-                  </div>
-                </div>
-              );
-            })}
-            {filtered.length === 0 && (
-              <div style={{ textAlign: "center", padding: "32px 0", color: "#334155", fontSize: 14 }}>
-                No problems match these filters.
-              </div>
-            )}
-          </div>
+          {browse.level === "home"     && <CategoryView />}
+          {browse.level === "type"     && <TypeView />}
+          {browse.level === "pattern"  && <PatternView />}
+          {browse.level === "problems" && <ProblemsView />}
         </>}
 
         {/* ── PROGRESS TAB ── */}
@@ -220,22 +444,27 @@ export function HomeScreen({ state, problems, onStart }) {
             </div>
           </div>
 
-          {/* Pattern mastery */}
+          {/* Pattern mastery grouped by DSA category */}
           <div style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: 14, marginBottom: 14 }}>
             <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Pattern Mastery</div>
-            {patternList.map(pat => {
-              const s = patternStats[pat] || { exposure: 0, correct: 0 };
-              const acc = s.exposure > 0 ? Math.round((s.correct / s.exposure) * 100) : null;
-              return (
-                <div key={pat} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 9 }}>
-                  <span style={{ width: 110, fontSize: 11, color: s.exposure > 0 ? "#94a3b8" : "#2d2d4e", flexShrink: 0 }}>{pat}</span>
-                  <div style={{ flex: 1 }}>
-                    <ProgressBar value={acc ?? 0} color={acc === null ? "#1e1e2e" : acc >= 70 ? "#22c55e" : acc >= 40 ? "#f59e0b" : "#ef4444"} />
-                  </div>
-                  <span style={{ width: 30, fontSize: 10, color: "#475569", textAlign: "right", flexShrink: 0 }}>{acc !== null ? `${acc}%` : "—"}</span>
-                </div>
-              );
-            })}
+            {DSA_TAXONOMY.map(cat => (
+              <div key={cat.id} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: cat.color, fontWeight: 700, marginBottom: 8 }}>{cat.emoji} {cat.label}</div>
+                {cat.types.flatMap(t => t.patterns).map(pat => {
+                  const s = patternStats[pat] || { exposure: 0, correct: 0 };
+                  const acc = s.exposure > 0 ? Math.round((s.correct / s.exposure) * 100) : null;
+                  return (
+                    <div key={pat} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
+                      <span style={{ width: 120, fontSize: 11, color: s.exposure > 0 ? "#94a3b8" : "#2d2d4e", flexShrink: 0 }}>{pat}</span>
+                      <div style={{ flex: 1 }}>
+                        <ProgressBar value={acc ?? 0} color={acc === null ? "#1e1e2e" : acc >= 70 ? "#22c55e" : acc >= 40 ? "#f59e0b" : "#ef4444"} />
+                      </div>
+                      <span style={{ width: 30, fontSize: 10, color: "#475569", textAlign: "right", flexShrink: 0 }}>{acc !== null ? `${acc}%` : "—"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </>}
 
