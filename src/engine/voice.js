@@ -11,13 +11,20 @@ export function createRecognition({ onResult, onEnd, onError }) {
   r.interimResults = true;
   r.lang = "en-US";
 
+  // Accumulate finalized text across the whole session in closure.
+  // Only process NEW results using e.resultIndex to avoid re-reading old ones.
+  let finalTranscript = "";
+
   r.onresult = (e) => {
-    let finalText = "", interimText = "";
-    for (let i = 0; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
-      else interimText += e.results[i][0].transcript;
+    let interimText = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        finalTranscript += e.results[i][0].transcript + " ";
+      } else {
+        interimText += e.results[i][0].transcript;
+      }
     }
-    onResult({ finalText, interimText });
+    onResult({ finalText: finalTranscript, interimText });
   };
 
   r.onerror = (e) => {
@@ -27,7 +34,8 @@ export function createRecognition({ onResult, onEnd, onError }) {
     onError(msg);
   };
 
-  r.onend = () => onEnd();
+  // Pass accumulated final transcript to onEnd so component can clean up interim markers.
+  r.onend = () => onEnd(finalTranscript);
 
   return r;
 }

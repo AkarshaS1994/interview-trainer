@@ -6,25 +6,44 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
   const [error, setError] = useState(null);
   const [supported] = useState(() => isVoiceSupported());
   const recognitionRef = useRef(null);
+  // Save whatever text existed before recording started so we can prepend it.
+  const baseTextRef = useRef("");
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
 
   const toggle = () => {
-    if (listening) { recognitionRef.current?.stop(); setListening(false); return; }
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+
     setError(null);
+    // Capture current text as the base; voice transcript is appended after it.
+    baseTextRef.current = value ? value.trimEnd() : "";
+
     const r = createRecognition({
       onResult: ({ finalText, interimText }) => {
-        onChange(prev => {
-          const base = prev.replace(/\s*\[…[^\]]*\]\s*$/, "").trimEnd();
-          return (base ? base + " " : "") + finalText + (interimText ? `[… ${interimText}]` : "");
-        });
+        const base = baseTextRef.current;
+        // Replace the whole value each time: base + accumulated finals + live interim marker.
+        onChange(
+          (base ? base + " " : "") +
+          finalText +
+          (interimText ? `[… ${interimText}]` : "")
+        );
       },
-      onEnd: () => {
+      onEnd: (finalText) => {
         setListening(false);
-        onChange(prev => prev.replace(/\s*\[…[^\]]*\]\s*$/, "").trimEnd());
+        const base = baseTextRef.current;
+        // Strip interim marker and set final clean value.
+        onChange(((base ? base + " " : "") + finalText).trimEnd());
       },
-      onError: (msg) => { setListening(false); setError(msg); },
+      onError: (msg) => {
+        setListening(false);
+        setError(msg);
+      },
     });
+
     if (!r) { setError("Voice not supported on this browser."); return; }
     recognitionRef.current = r;
     r.start();
@@ -32,7 +51,7 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
   };
 
   const stop = () => { recognitionRef.current?.stop(); setListening(false); };
-  VoiceInput.stop = stop; // expose for parent submit
+  VoiceInput.stop = stop;
 
   return (
     <div>
@@ -49,8 +68,16 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
           {listening ? "Stop Recording" : "Speak Your Answer"}
         </button>
       )}
-      {listening && <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, marginBottom: 6 }}>● Recording…</div>}
-      {error && <div style={{ fontSize: 12, color: "#f59e0b", background: "#1c1400", border: "1px solid #f59e0b30", borderRadius: 8, padding: "7px 10px", marginBottom: 8 }}>⚠️ {error}</div>}
+      {listening && (
+        <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, marginBottom: 6 }}>
+          ● Recording — tap Stop when done
+        </div>
+      )}
+      {error && (
+        <div style={{ fontSize: 12, color: "#f59e0b", background: "#1c1400", border: "1px solid #f59e0b30", borderRadius: 8, padding: "7px 10px", marginBottom: 8 }}>
+          ⚠️ {error}
+        </div>
+      )}
       <textarea
         value={value}
         onChange={e => onChange(e.target.value)}
