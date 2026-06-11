@@ -41,7 +41,7 @@ export function HomeScreen({ state, problems, onStart }) {
         <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>
           Meta Interview Trainer
         </div>
-        <div style={{ fontSize: 24, fontWeight: 900, color: "#f1f5f9", lineHeight: 1.1 }}>Think Like a Senior Engineer</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: "#f1f5f9", lineHeight: 1.1 }}>Think Like a Senior Engineer 🚀</div>
         <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>
           {unlocked.length} problems unlocked · {problems.length - unlocked.length > 0 ? `${problems.length - unlocked.length} locked` : "all unlocked"}
         </div>
