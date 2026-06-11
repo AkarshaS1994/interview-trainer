@@ -251,7 +251,7 @@ export function HomeScreen({ state, problems, onStart }) {
             Choose a problem
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {unlocked.filter(p => p.difficulty !== "Easy").map(p => (
+            {unlocked.map(p => (
               <div key={p.id} onClick={() => onStart(p, true)} style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
