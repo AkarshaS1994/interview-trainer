@@ -8,13 +8,13 @@ const KEYWORDS = {
   edge:        ["empty","null","single","duplicate","negative","zero","large","equal","same","one","none","all","overflow","boundary","cycle","self","loop","disconnected","balanced"],
 };
 
-export function scoreStep(text, stepId) {
+export function scoreStep(text, stepId, problem = null) {
   if (!text || typeof text !== "string") return { score: 0, passed: false, feedback: "No answer provided." };
   const lower = text.toLowerCase();
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   if (words < 10) return { score: 0, passed: false, feedback: "Too brief — explain your reasoning fully. Think out loud." };
 
-  const kws = KEYWORDS[stepId] || KEYWORDS.understand;
+  const kws = problem?.keywords?.[stepId] || KEYWORDS[stepId] || KEYWORDS.understand;
   const matched = kws.filter(k => lower.includes(k.toLowerCase()));
   const ratio = matched.length / Math.max(kws.length, 1);
 

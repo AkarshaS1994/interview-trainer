@@ -52,7 +52,7 @@ export function ProblemScreen({ problem, simMode, state, onComplete, onBack, onA
   const submitStep = () => {
     if (!input.trim() || submitted) return;
     clearTimeout(timerRef.current); setTimerActive(false);
-    const result = scoreStep(input, step.id);
+    const result = scoreStep(input, step.id, problem);
     const newScores = { ...scores, [step.id]: result.score };
     setScores(newScores);
     setFeedbacks(prev => ({ ...prev, [step.id]: result.feedback }));

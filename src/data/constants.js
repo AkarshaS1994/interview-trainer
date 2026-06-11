@@ -3,7 +3,7 @@ export const DIFFICULTIES = ["Easy", "Medium", "Hard"];
 export const PATTERNS = [
   "Arrays", "Linked List", "Sliding Window", "Two Pointers",
   "Stack / Queue", "Binary Search", "Trees", "Graphs",
-  "Heap", "Trie", "Union-Find", "DP", "Greedy", "Intervals", "Backtracking",
+  "Heap", "Trie", "Union-Find", "DP", "Greedy", "Intervals", "Backtracking", "Bit Manipulation",
 ];
 
 export const COMPANIES = ["Meta", "Amazon", "Google", "NVIDIA"];

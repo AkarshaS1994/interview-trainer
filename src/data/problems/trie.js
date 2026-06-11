@@ -19,6 +19,15 @@ export const TRIE_PROBLEMS = [
     pushback: { challenge: "How would you add a delete operation?", options: ["Traverse to word end, unset isEnd. Then backtrack deleting nodes with no children and isEnd=false. O(L).","Set isEnd=false only — don't remove nodes","Can't delete without full rebuild"], correct: 0, explanation: "Delete: first check word exists. Set isEnd=false at end node. Then backtrack: if node has no children and isEnd=false, delete it (free memory). Stop backtracking if node has other children or isEnd." },
     followup: { question: "How would you implement autocomplete — return all words with a given prefix?", options: ["Traverse to prefix end (O(L)). Then DFS from that node collecting all words with isEnd=true. Total O(L + P) where P = total chars in all matching words.","Return random word with prefix","Can't do with Trie"], correct: 0, explanation: "Autocomplete: prefix traversal O(L) to reach prefix node. DFS from there: collect all paths to isEnd=true nodes. Each such path = one complete word. O(L + total output size)." },
     solution: { approach: "TrieNode with Array Children", steps: ["TrieNode: children=array[26], isEnd=false","insert: for each char, create node if missing, walk to next","search: walk chars, return false if missing, return node.isEnd at end","startsWith: walk chars, return false if missing, return true at end"], time: "O(L) per operation", space: "O(n×L) total" },
+    keywords: {
+      understand: ["prefix","HashSet","O(L)","search","autocomplete","n×L","shared","trie"],
+      brute: ["list","scan","n words","O(n×L)","check","every","word"],
+      pattern: ["TrieNode","children","isEnd","depth","path","prefix","array[26]"],
+      algorithm: ["insert","search","startsWith","isEnd","traverse","create","missing"],
+      tradeoff: ["array[26]","HashMap","alphabet","sparse","Unicode","space","O(1)"],
+      complexity: ["O(L)","time","O(n×L)","space","path","traversal","single"],
+      edge: ["empty string","search before insert","duplicate","not inserted","isEnd"],
+    },
   },
   {
     id: "tri2", title: "Search Suggestions System", difficulty: "Medium", pattern: "Trie",
@@ -40,5 +49,14 @@ export const TRIE_PROBLEMS = [
     pushback: { challenge: "What if you need top 3 by FREQUENCY (most searched), not lexicographic order?", options: ["Store frequency counts. Use Trie with max-heap per node (top-3 frequent). Or: sort by frequency desc before insert. More complex but same O(L) query.","Can't rank by frequency with Trie","Sort by frequency descending then take top 3 per prefix linearly"], correct: 0, explanation: "Frequency-ranked: each Trie node stores top-3 by frequency (small heap). Insert updates heaps along path. Query: return heap at prefix node. O(L×3 log 3) per insert, O(L) per query." },
     followup: { question: "How would you handle the case where searchWord can contain typos (fuzzy matching)?", options: ["Trie + BFS/DFS with edit distance budget. At each node, allow up to k character mismatches. O(n×26^k) worst case — feasible for k=1.","Only exact Trie match","Sort handles typos"], correct: 0, explanation: "Fuzzy Trie search: DFS from root with (node, remaining_budget). At each level: match = recurse normally, mismatch = recurse with budget-1. Collect words at isEnd nodes. Exponential in k but k is small (≤2 in practice)." },
     solution: { approach: "Sort + Binary Search", steps: ["Sort products lexicographically","For each prefix p of searchWord: binary search first index >= p","Scan up to 3 products checking startsWith(p)","Append matches to result"], time: "O(n log n + L²)", space: "O(1) extra" },
+    keywords: {
+      understand: ["prefix","L","searchWord","queries","per character","typed","suggestions"],
+      brute: ["O(n×L²)","scan","filter","every","check","prefix","sort"],
+      pattern: ["sorted","DFS","3","lex order","stop","pre-sort","trie"],
+      algorithm: ["binary search","first","startsWith","3","scan","consecutive","O(log n)"],
+      tradeoff: ["static","dynamic","O(L)","O(n)","Trie","sorted array","insert"],
+      complexity: ["O(n log n)","L","log n","3L","prefix","binary search","sort"],
+      edge: ["no match","empty","L empty lists","not found","xyz"],
+    },
   },
 ];
