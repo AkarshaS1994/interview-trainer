@@ -5,14 +5,30 @@ import { HEAP_PROBLEMS } from "./problems/heap.js";
 import { DP_PROBLEMS } from "./problems/dp.js";
 import { SLIDING_WINDOW_PROBLEMS } from "./problems/slidingWindow.js";
 import { BACKTRACKING_PROBLEMS } from "./problems/backtracking.js";
+import { LINKED_LIST_PROBLEMS } from "./problems/linkedList.js";
+import { TWO_POINTER_PROBLEMS } from "./problems/twoPointers.js";
+import { BINARY_SEARCH_PROBLEMS } from "./problems/binarySearch.js";
+import { STACK_QUEUE_PROBLEMS } from "./problems/stackQueue.js";
+import { TRIE_PROBLEMS } from "./problems/trie.js";
+import { GREEDY_PROBLEMS } from "./problems/greedy.js";
+import { INTERVAL_PROBLEMS } from "./problems/intervals.js";
+import { UNION_FIND_PROBLEMS } from "./problems/unionFind.js";
 
 export const ALL_PROBLEMS = [
   ...ARRAY_PROBLEMS,
+  ...LINKED_LIST_PROBLEMS,
   ...SLIDING_WINDOW_PROBLEMS,
+  ...TWO_POINTER_PROBLEMS,
+  ...BINARY_SEARCH_PROBLEMS,
+  ...STACK_QUEUE_PROBLEMS,
   ...TREE_PROBLEMS,
   ...GRAPH_PROBLEMS,
   ...HEAP_PROBLEMS,
+  ...TRIE_PROBLEMS,
+  ...UNION_FIND_PROBLEMS,
   ...DP_PROBLEMS,
+  ...GREEDY_PROBLEMS,
+  ...INTERVAL_PROBLEMS,
   ...BACKTRACKING_PROBLEMS,
 ];
 
@@ -35,4 +51,9 @@ if (import.meta.env?.DEV) {
   console.log(`✓ Loaded ${ALL_PROBLEMS.length} problems`);
 }
 
-export { ARRAY_PROBLEMS, TREE_PROBLEMS, GRAPH_PROBLEMS, HEAP_PROBLEMS, DP_PROBLEMS, SLIDING_WINDOW_PROBLEMS, BACKTRACKING_PROBLEMS };
+export {
+  ARRAY_PROBLEMS, LINKED_LIST_PROBLEMS, SLIDING_WINDOW_PROBLEMS, TWO_POINTER_PROBLEMS,
+  BINARY_SEARCH_PROBLEMS, STACK_QUEUE_PROBLEMS, TREE_PROBLEMS, GRAPH_PROBLEMS,
+  HEAP_PROBLEMS, TRIE_PROBLEMS, UNION_FIND_PROBLEMS, DP_PROBLEMS,
+  GREEDY_PROBLEMS, INTERVAL_PROBLEMS, BACKTRACKING_PROBLEMS,
+};
