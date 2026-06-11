@@ -161,14 +161,25 @@ export function ProblemScreen({ problem, simMode, state, onComplete, onBack, onA
                 }}>
                   <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{checked ? "☑" : "☐"}</span>
                   <span style={{ flex: 1 }}>{opt}</span>
-                  {clarifySubmitted && isMust && <span style={{ marginLeft: "auto", fontSize: 11, flexShrink: 0, color: checked ? "#22c55e" : "#ef4444" }}>{checked ? "✓ Key" : "✗ Missed"}</span>}
+                  {clarifySubmitted && (
+                    <span style={{ marginLeft: "auto", fontSize: 11, flexShrink: 0, color: isMust ? (checked ? "#22c55e" : "#ef4444") : "#f59e0b" }}>
+                      {isMust ? (checked ? "✓ Key" : "✗ Missed") : "Optional"}
+                    </span>
+                  )}
                 </button>
               );
             })}
             {clarifySubmitted && (
-              <div style={{ background: "#0a0f18", border: "1px solid #1e3a5e", borderRadius: 8, padding: "10px 12px", fontSize: 12, color: "#94a3b8", lineHeight: 1.6, marginBottom: 12 }}>
-                💡 {problem.clarify.explanation}
-              </div>
+              <>
+                <div style={{ display: "flex", gap: 12, marginBottom: 10, fontSize: 11, flexWrap: "wrap" }}>
+                  <span style={{ color: "#22c55e" }}>■ Key — must ask</span>
+                  <span style={{ color: "#ef4444" }}>■ Missed — important</span>
+                  <span style={{ color: "#f59e0b" }}>■ Optional — nice to ask</span>
+                </div>
+                <div style={{ background: "#0a0f18", border: "1px solid #1e3a5e", borderRadius: 8, padding: "10px 12px", fontSize: 12, color: "#94a3b8", lineHeight: 1.6, marginBottom: 12 }}>
+                  💡 {problem.clarify.explanation}
+                </div>
+              </>
             )}
             {!clarifySubmitted
               ? <button onClick={submitClarify} disabled={clarifyChecked.length === 0} style={{ width: "100%", padding: "13px", background: clarifyChecked.length > 0 ? "#6366f1" : "#1e1e2e", color: clarifyChecked.length > 0 ? "#fff" : "#334155", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 15, cursor: clarifyChecked.length > 0 ? "pointer" : "default" }}>Submit Questions</button>
