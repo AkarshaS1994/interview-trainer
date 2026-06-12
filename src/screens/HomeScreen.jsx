@@ -7,19 +7,34 @@ import { getDueForReview } from "../engine/spacedRep.js";
 
 const DIFF_COLOR = { Easy: "#22c55e", Medium: "#f59e0b", Hard: "#ef4444" };
 const DIFF_BG    = { Easy: "#052e16", Medium: "#1c1400", Hard: "#1c0000" };
+const COMPANIES  = ["All", "Meta", "Amazon", "Google", "NVIDIA"];
+const DAILY_GOAL = 3;
 
-// Initial browse state
 const HOME = { level: "home", category: null, type: null, pattern: null };
 
 export function HomeScreen({ state, problems, onStart }) {
-  const [tab, setTab]           = useState("problems");
-  const [filterDiff, setFilterDiff] = useState("All");
-  const [browse, setBrowse]     = useState(HOME);
+  const [tab, setTab]             = useState("problems");
+  const [filterDiff, setFilterDiff]       = useState("All");
+  const [filterCompany, setFilterCompany] = useState("All");
+  const [browse, setBrowse]       = useState(HOME);
+  const [searchQuery, setSearchQuery]     = useState("");
+  const [showShareCard, setShowShareCard] = useState(false);
 
-  const { xp, badges, completed, patternStats, daysPracticed, stepStreak } = state;
-  const lvl  = computeLevel(xp);
-  const due  = getDueForReview(completed, problems);
+  const { xp, badges, completed, patternStats, daysPracticed, stepStreak, sessionHistory = [], notes = {} } = state;
+  const lvl     = computeLevel(xp);
+  const due     = getDueForReview(completed, problems);
   const unlocked = problems.filter(p => lvl.unlockedDifficulties.includes(p.difficulty));
+
+  const today      = new Date().toDateString();
+  const todayCount = Object.values(completed).filter(c => c.date === today).length;
+
+  const streak = (() => {
+    const set = new Set(daysPracticed);
+    let count = 0;
+    const d = new Date();
+    while (set.has(d.toDateString())) { count++; d.setDate(d.getDate() - 1); }
+    return count;
+  })();
 
   const weakestPattern = (() => {
     let worst = null, worstAcc = 2;
@@ -29,13 +44,13 @@ export function HomeScreen({ state, problems, onStart }) {
     return worst;
   })();
 
-  // Find a pattern in the taxonomy and navigate to it
   const navigateToPattern = (pattern) => {
     for (const cat of DSA_TAXONOMY) {
       for (const type of cat.types) {
         if (type.patterns.includes(pattern)) {
           setBrowse({ level: "problems", category: cat, type, pattern });
           setFilterDiff("All");
+          setFilterCompany("All");
           return;
         }
       }
@@ -43,8 +58,8 @@ export function HomeScreen({ state, problems, onStart }) {
   };
 
   const goBack = () => {
+    const multiPattern = browse.type && browse.type.patterns.length > 1;
     if (browse.level === "problems") {
-      const multiPattern = browse.type && browse.type.patterns.length > 1;
       setBrowse(multiPattern
         ? { ...browse, level: "pattern", pattern: null }
         : { ...browse, level: "type", type: null, pattern: null }
@@ -63,17 +78,40 @@ export function HomeScreen({ state, problems, onStart }) {
       setBrowse({ ...browse, level: "pattern", type, pattern: null });
     }
     setFilterDiff("All");
+    setFilterCompany("All");
   };
 
   const browsedProblems = browse.level === "problems"
     ? unlocked.filter(p =>
         p.pattern === browse.pattern &&
-        (filterDiff === "All" || p.difficulty === filterDiff)
+        (filterDiff === "All" || p.difficulty === filterDiff) &&
+        (filterCompany === "All" || p.companies.includes(filterCompany))
       )
     : [];
 
-  // Count unlocked problems for a given set of patterns
+  const searchResults = searchQuery.trim().length > 0
+    ? unlocked.filter(p => p.title.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    : [];
+
   const countFor = (patterns) => unlocked.filter(p => patterns.includes(p.pattern)).length;
+  const isDue = (p) => due.find(x => x.id === p.id);
+
+  // ── Share card text ───────────────────────────────────────────────────────
+  const copyShareText = () => {
+    const topPatterns = Object.entries(patternStats)
+      .filter(([, s]) => s.exposure > 0)
+      .map(([pat, s]) => [pat, Math.round((s.correct / s.exposure) * 100)])
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    const text = [
+      `🚀 Interview Trainer Progress`,
+      `Level ${lvl.level} · ${lvl.label} — ${xp} XP`,
+      `✅ ${Object.keys(completed).length}/${problems.length} problems solved`,
+      `🔥 ${streak}-day streak · ${todayCount}/${DAILY_GOAL} today`,
+      topPatterns.length ? `\nTop patterns: ${topPatterns.map(([p, a]) => `${p} (${a}%)`).join(" · ")}` : "",
+    ].filter(Boolean).join("\n");
+    navigator.clipboard?.writeText(text).catch(() => {});
+  };
 
   // ── Shared banners ────────────────────────────────────────────────────────
   const ReviewBanner = () => due.length === 0 ? null : (
@@ -99,23 +137,56 @@ export function HomeScreen({ state, problems, onStart }) {
     </div>
   );
 
-  // ── Back button ───────────────────────────────────────────────────────────
   const BackRow = ({ label }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
       <button onClick={goBack} style={{
         background: "#111118", border: "1px solid #1e1e2e", borderRadius: 8,
         padding: "6px 12px", color: "#a5b4fc", fontSize: 12, fontWeight: 700, cursor: "pointer",
-        display: "flex", alignItems: "center", gap: 4,
       }}>‹ {label}</button>
       {browse.level === "problems" && browse.type && (
-        <span style={{ fontSize: 11, color: "#334155" }}>
-          {browse.category?.label} · {browse.type.label}
-        </span>
+        <span style={{ fontSize: 11, color: "#334155" }}>{browse.category?.label} · {browse.type.label}</span>
       )}
       {browse.level === "pattern" && (
-        <span style={{ fontSize: 11, color: "#334155" }}>
-          {browse.category?.label}
-        </span>
+        <span style={{ fontSize: 11, color: "#334155" }}>{browse.category?.label}</span>
+      )}
+    </div>
+  );
+
+  // ── Search results view ───────────────────────────────────────────────────
+  const SearchView = () => (
+    <div>
+      {searchResults.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px 0", color: "#334155", fontSize: 14 }}>
+          No problems found for "{searchQuery}"
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>{searchResults.length} result{searchResults.length !== 1 ? "s" : ""}</div>
+          {searchResults.map(p => {
+            const done = completed[p.id];
+            return (
+              <div key={p.id} onClick={() => onStart(p)} style={{
+                background: "#111118", border: `1px solid ${done ? "#22c55e20" : "#1a1a2e"}`,
+                borderRadius: 12, padding: "14px 16px", cursor: "pointer",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 5 }}>
+                      <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 15 }}>{p.title}</span>
+                      {done && <span style={{ fontSize: 11, color: done.score >= 80 ? "#22c55e" : "#f59e0b", fontWeight: 700 }}>✓ {done.score}%</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, background: DIFF_BG[p.difficulty], color: DIFF_COLOR[p.difficulty] }}>{p.difficulty}</span>
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, background: "#1e1e3e", color: "#818cf8" }}>{p.pattern}</span>
+                      {p.companies.slice(0, 2).map(c => <span key={c} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, background: "#0f1015", color: "#475569" }}>{c}</span>)}
+                    </div>
+                  </div>
+                  <span style={{ color: "#2d2d4e", fontSize: 18, marginLeft: 8 }}>›</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -132,12 +203,11 @@ export function HomeScreen({ state, problems, onStart }) {
           <button onClick={() => navigateToPattern(weakestPattern)} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Go</button>
         </div>
       )}
-
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {DSA_TAXONOMY.map(cat => {
-          const total = countFor(cat.types.flatMap(t => t.patterns));
-          const done  = cat.types.flatMap(t => t.patterns).reduce((acc, pat) =>
-            acc + unlocked.filter(p => p.pattern === pat && completed[p.id]).length, 0);
+          const allPatterns = cat.types.flatMap(t => t.patterns);
+          const total = countFor(allPatterns);
+          const done  = unlocked.filter(p => allPatterns.includes(p.pattern) && completed[p.id]).length;
           return (
             <div key={cat.id} onClick={() => setBrowse({ level: "type", category: cat, type: null, pattern: null })}
               style={{ background: "#111118", border: `1px solid ${cat.color}25`, borderRadius: 14, padding: "18px 16px", cursor: "pointer" }}
@@ -151,9 +221,7 @@ export function HomeScreen({ state, problems, onStart }) {
                   <div style={{ fontSize: 12, color: "#475569", marginBottom: 10 }}>{cat.description}</div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {cat.types.map(t => (
-                      <span key={t.id} style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 5, background: `${cat.color}15`, color: cat.color }}>
-                        {t.label}
-                      </span>
+                      <span key={t.id} style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 5, background: `${cat.color}15`, color: cat.color }}>{t.label}</span>
                     ))}
                   </div>
                 </div>
@@ -177,11 +245,8 @@ export function HomeScreen({ state, problems, onStart }) {
   const TypeView = () => (
     <div>
       <BackRow label="All Topics" />
-      <div style={{ fontSize: 20, fontWeight: 800, color: "#f1f5f9", marginBottom: 4 }}>
-        {browse.category.emoji} {browse.category.label}
-      </div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: "#f1f5f9", marginBottom: 4 }}>{browse.category.emoji} {browse.category.label}</div>
       <div style={{ fontSize: 12, color: "#475569", marginBottom: 16 }}>{browse.category.description}</div>
-
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {browse.category.types.map(type => {
           const total  = countFor(type.patterns);
@@ -205,7 +270,6 @@ export function HomeScreen({ state, problems, onStart }) {
                   <div style={{ fontSize: 9, color: "#334155" }}>problems</div>
                 </div>
               </div>
-
               {type.patterns.length > 1 && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                   {type.patterns.map(pat => (
@@ -215,11 +279,8 @@ export function HomeScreen({ state, problems, onStart }) {
                   ))}
                 </div>
               )}
-
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <ProgressBar value={done} max={Math.max(total, 1)} color={browse.category.color} />
-                </div>
+                <div style={{ flex: 1 }}><ProgressBar value={done} max={Math.max(total, 1)} color={browse.category.color} /></div>
                 <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{done}/{total}</span>
                 <span style={{ fontSize: 16, color: "#2d2d4e" }}>›</span>
               </div>
@@ -230,9 +291,9 @@ export function HomeScreen({ state, problems, onStart }) {
     </div>
   );
 
-  // ── Level 3: Pattern cards (only for types with multiple patterns) ─────────
+  // ── Level 3: Pattern cards ────────────────────────────────────────────────
   const PatternView = () => {
-    const cat = browse.category;
+    const cat  = browse.category;
     const type = browse.type;
     return (
       <div>
@@ -242,14 +303,13 @@ export function HomeScreen({ state, problems, onStart }) {
           <span style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9" }}>{type.label}</span>
         </div>
         <div style={{ fontSize: 12, color: "#475569", marginBottom: 16 }}>{type.description}</div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {type.patterns.map(pat => {
             const total = unlocked.filter(p => p.pattern === pat).length;
             const done  = unlocked.filter(p => p.pattern === pat && completed[p.id]).length;
             const diffs = ["Easy","Medium","Hard"].map(d => unlocked.filter(p => p.pattern === pat && p.difficulty === d).length);
             return (
-              <div key={pat} onClick={() => { setBrowse({ ...browse, level: "problems", pattern: pat }); setFilterDiff("All"); }}
+              <div key={pat} onClick={() => { setBrowse({ ...browse, level: "problems", pattern: pat }); setFilterDiff("All"); setFilterCompany("All"); }}
                 style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -261,9 +321,7 @@ export function HomeScreen({ state, problems, onStart }) {
                 </div>
                 <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                   {[["Easy","#22c55e"],["Medium","#f59e0b"],["Hard","#ef4444"]].map(([d, c], i) => diffs[i] > 0 ? (
-                    <span key={d} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5, background: DIFF_BG[d], color: c }}>
-                      {d[0]} {diffs[i]}
-                    </span>
+                    <span key={d} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5, background: DIFF_BG[d], color: c }}>{d[0]} {diffs[i]}</span>
                   ) : null)}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -282,11 +340,9 @@ export function HomeScreen({ state, problems, onStart }) {
   const ProblemsView = () => {
     const totalInPattern = unlocked.filter(p => p.pattern === browse.pattern).length;
     const doneInPattern  = unlocked.filter(p => p.pattern === browse.pattern && completed[p.id]).length;
-    const isDue = (p) => due.find(x => x.id === p.id);
     return (
       <div>
         <BackRow label={browse.type?.patterns.length > 1 ? browse.pattern : browse.type?.label || "Back"} />
-
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9" }}>{browse.pattern}</span>
@@ -299,8 +355,8 @@ export function HomeScreen({ state, problems, onStart }) {
         </div>
 
         {/* Difficulty filter */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
-          {["All", "Easy", "Medium", "Hard"].map(d => (
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto", paddingBottom: 4 }}>
+          {["All","Easy","Medium","Hard"].map(d => (
             <button key={d} onClick={() => setFilterDiff(d)} style={{
               flexShrink: 0, padding: "6px 14px", borderRadius: 20, cursor: "pointer",
               border: `1px solid ${filterDiff === d ? (DIFF_COLOR[d] || "#6366f1") : "#1e1e2e"}`,
@@ -311,11 +367,24 @@ export function HomeScreen({ state, problems, onStart }) {
           ))}
         </div>
 
-        {/* Problem list */}
+        {/* Company filter */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
+          {COMPANIES.map(c => (
+            <button key={c} onClick={() => setFilterCompany(c)} style={{
+              flexShrink: 0, padding: "5px 12px", borderRadius: 20, cursor: "pointer",
+              border: `1px solid ${filterCompany === c ? "#6366f1" : "#1e1e2e"}`,
+              background: filterCompany === c ? "#1a1a2e" : "#111118",
+              color: filterCompany === c ? "#a5b4fc" : "#475569",
+              fontSize: 11, fontWeight: 600,
+            }}>{c}</button>
+          ))}
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {browsedProblems.map(p => {
             const done = completed[p.id];
             const due_ = isDue(p);
+            const hasNote = notes[p.id]?.trim().length > 0;
             return (
               <div key={p.id} onClick={() => onStart(p)} style={{
                 background: "#111118",
@@ -328,6 +397,7 @@ export function HomeScreen({ state, problems, onStart }) {
                       <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 15 }}>{p.title}</span>
                       {done && <span style={{ fontSize: 11, color: done.score >= 80 ? "#22c55e" : "#f59e0b", fontWeight: 700 }}>✓ {done.score}%</span>}
                       {due_ && <span style={{ fontSize: 10, color: "#f59e0b", background: "#1a1000", border: "1px solid #f59e0b40", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Review</span>}
+                      {hasNote && <span style={{ fontSize: 11 }} title="Has notes">📝</span>}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, background: DIFF_BG[p.difficulty], color: DIFF_COLOR[p.difficulty] }}>{p.difficulty}</span>
@@ -341,9 +411,72 @@ export function HomeScreen({ state, problems, onStart }) {
           })}
           {browsedProblems.length === 0 && (
             <div style={{ textAlign: "center", padding: "32px 0", color: "#334155", fontSize: 14 }}>
-              No {filterDiff !== "All" ? filterDiff : ""} problems unlocked here yet.
+              No {filterDiff !== "All" ? filterDiff : ""}{filterCompany !== "All" ? ` ${filterCompany}` : ""} problems unlocked here yet.
             </div>
           )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Share card modal ──────────────────────────────────────────────────────
+  const ShareCard = () => {
+    const topPatterns = Object.entries(patternStats)
+      .filter(([, s]) => s.exposure > 0)
+      .map(([pat, s]) => [pat, Math.round((s.correct / s.exposure) * 100)])
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        onClick={() => setShowShareCard(false)}>
+        <div onClick={e => e.stopPropagation()} style={{
+          background: "linear-gradient(135deg, #0f0f1e, #111118)",
+          border: "1px solid #6366f140", borderRadius: 20, padding: 28, maxWidth: 340, width: "100%",
+        }}>
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Interview Trainer</div>
+            <div style={{ fontSize: 28 }}>{lvl.level >= 5 ? "🚀" : lvl.level >= 3 ? "⚡" : "🌱"}</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: lvl.color, marginTop: 4 }}>Level {lvl.level} · {lvl.label}</div>
+            <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>{xp} XP</div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+            {[
+              { icon: "✅", val: Object.keys(completed).length, sub: "solved" },
+              { icon: "🔥", val: streak,                        sub: "day streak" },
+              { icon: "📅", val: todayCount + "/" + DAILY_GOAL, sub: "today" },
+            ].map(s => (
+              <div key={s.sub} style={{ background: "#0d0d14", borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+                <div style={{ fontSize: 18 }}>{s.icon}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: "#f1f5f9", marginTop: 2 }}>{s.val}</div>
+                <div style={{ fontSize: 9, color: "#475569" }}>{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {topPatterns.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Top Patterns</div>
+              {topPatterns.map(([pat, acc]) => (
+                <div key={pat} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <span style={{ width: 100, fontSize: 11, color: "#94a3b8" }}>{pat}</span>
+                  <div style={{ flex: 1 }}><ProgressBar value={acc} color={acc >= 70 ? "#22c55e" : acc >= 40 ? "#f59e0b" : "#ef4444"} /></div>
+                  <span style={{ width: 30, fontSize: 11, color: "#475569", textAlign: "right" }}>{acc}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={copyShareText} style={{ flex: 1, padding: "11px", background: "#6366f1", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              Copy Text
+            </button>
+            <button onClick={() => setShowShareCard(false)} style={{ flex: 1, padding: "11px", background: "#1e1e2e", color: "#a5b4fc", border: "1px solid #2d2d4e", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              Close
+            </button>
+          </div>
+          <div style={{ fontSize: 10, color: "#334155", textAlign: "center", marginTop: 10 }}>Screenshot to share</div>
         </div>
       </div>
     );
@@ -352,11 +485,11 @@ export function HomeScreen({ state, problems, onStart }) {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background: "#07070f", minHeight: "100vh", color: "#e2e8f0", fontFamily: "system-ui,sans-serif", paddingBottom: 80 }}>
+      {showShareCard && <ShareCard />}
+
       {/* Header */}
       <div style={{ background: "linear-gradient(180deg,#0f0f1e,#07070f)", padding: "28px 20px 16px", borderBottom: "1px solid #1a1a2e" }}>
-        <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>
-          Meta Interview Trainer
-        </div>
+        <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Meta Interview Trainer</div>
         <div style={{ fontSize: 24, fontWeight: 900, color: "#f1f5f9", lineHeight: 1.1 }}>Think Like a Senior Engineer 🚀</div>
         <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>
           {unlocked.length} problems unlocked · {problems.length - unlocked.length > 0 ? `${problems.length - unlocked.length} locked` : "all unlocked"}
@@ -377,6 +510,24 @@ export function HomeScreen({ state, problems, onStart }) {
             </div>
           )}
         </div>
+
+        {/* Daily goal + streak */}
+        <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+          <div style={{ flex: 1, background: "#111118", borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <span style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>Today's Goal</span>
+              <span style={{ fontSize: 11, color: todayCount >= DAILY_GOAL ? "#22c55e" : "#f59e0b", fontWeight: 700 }}>
+                {todayCount >= DAILY_GOAL ? "✓ Done!" : `${todayCount}/${DAILY_GOAL}`}
+              </span>
+            </div>
+            <ProgressBar value={Math.min(todayCount, DAILY_GOAL)} max={DAILY_GOAL} color={todayCount >= DAILY_GOAL ? "#22c55e" : "#6366f1"} height={4} />
+          </div>
+          <div style={{ background: "#111118", borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 70 }}>
+            <div style={{ fontSize: 20 }}>🔥</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: streak > 0 ? "#f59e0b" : "#334155" }}>{streak}</div>
+            <div style={{ fontSize: 9, color: "#475569" }}>day streak</div>
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -396,23 +547,52 @@ export function HomeScreen({ state, problems, onStart }) {
 
         {/* ── PROBLEMS TAB ── */}
         {tab === "problems" && <>
-          <ReviewBanner />
-          <LockedBanner />
+          {/* Search bar */}
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search problems..."
+              style={{
+                width: "100%", background: "#111118", border: "1px solid #1e1e2e", borderRadius: 10,
+                color: "#e2e8f0", fontSize: 13, padding: "10px 36px 10px 14px",
+                fontFamily: "system-ui,sans-serif", outline: "none", boxSizing: "border-box",
+              }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} style={{
+                position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", color: "#475569", fontSize: 16, cursor: "pointer", padding: 0,
+              }}>✕</button>
+            )}
+          </div>
 
-          {browse.level === "home"     && <CategoryView />}
-          {browse.level === "type"     && <TypeView />}
-          {browse.level === "pattern"  && <PatternView />}
-          {browse.level === "problems" && <ProblemsView />}
+          {searchQuery.trim() ? <SearchView /> : <>
+            <ReviewBanner />
+            <LockedBanner />
+            {browse.level === "home"     && <CategoryView />}
+            {browse.level === "type"     && <TypeView />}
+            {browse.level === "pattern"  && <PatternView />}
+            {browse.level === "problems" && <ProblemsView />}
+          </>}
         </>}
 
         {/* ── PROGRESS TAB ── */}
         {tab === "progress" && <>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <button onClick={() => setShowShareCard(true)} style={{
+              background: "#1e1e2e", border: "1px solid #2d2d4e", borderRadius: 8,
+              padding: "7px 14px", color: "#a5b4fc", fontSize: 12, fontWeight: 700, cursor: "pointer",
+            }}>Share Progress ↗</button>
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
             {[
               { label: "Problems Done", value: Object.keys(completed).length, sub: `of ${problems.length}`, icon: "✅" },
-              { label: "Total XP", value: xp, sub: lvl.label, icon: "⚡" },
-              { label: "Step Streak", value: stepStreak, sub: "correct in a row", icon: "🔥" },
-              { label: "Days Practiced", value: daysPracticed.length, sub: "days total", icon: "📅" },
+              { label: "Total XP",      value: xp,             sub: lvl.label,                   icon: "⚡" },
+              { label: "Step Streak",   value: stepStreak,     sub: "correct in a row",           icon: "🔥" },
+              { label: "Days Practiced",value: daysPracticed.length, sub: "days total",          icon: "📅" },
             ].map(s => (
               <div key={s.label} style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: 14 }}>
                 <div style={{ fontSize: 22 }}>{s.icon}</div>
@@ -422,6 +602,25 @@ export function HomeScreen({ state, problems, onStart }) {
               </div>
             ))}
           </div>
+
+          {/* Session history */}
+          {sessionHistory.length > 0 && (
+            <div style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: 14, marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Recent Sessions</div>
+              {sessionHistory.slice(0, 10).map((s, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, paddingBottom: 8, borderBottom: i < Math.min(sessionHistory.length, 10) - 1 ? "1px solid #0d0d14" : "none" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 600 }}>{s.title}</div>
+                    <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>{s.pattern} · {s.date}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: s.score >= 80 ? "#22c55e" : s.score >= 55 ? "#f59e0b" : "#ef4444" }}>{s.score}%</div>
+                    <div style={{ fontSize: 9, color: "#334155" }}>{s.difficulty}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Badges */}
           <div style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: 14, marginBottom: 14 }}>
@@ -442,7 +641,7 @@ export function HomeScreen({ state, problems, onStart }) {
             </div>
           </div>
 
-          {/* Pattern mastery grouped by DSA category */}
+          {/* Pattern mastery */}
           <div style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: 14, marginBottom: 14 }}>
             <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Pattern Mastery</div>
             {DSA_TAXONOMY.map(cat => (
@@ -474,9 +673,7 @@ export function HomeScreen({ state, problems, onStart }) {
               • 2.5 min timer per step{"\n"}• No hints{"\n"}• Full flow: Clarify → Steps → Dry Run → Pushback → Follow-up
             </div>
           </div>
-          <div style={{ fontSize: 12, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
-            Choose a problem
-          </div>
+          <div style={{ fontSize: 12, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Choose a problem</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {unlocked.map(p => (
               <div key={p.id} onClick={() => onStart(p, true)} style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}>

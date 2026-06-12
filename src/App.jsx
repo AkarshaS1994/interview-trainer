@@ -15,6 +15,8 @@ const INITIAL_STATE = {
   patternStats: {},
   daysPracticed: [],
   stepStreak: 0,
+  sessionHistory: [],
+  notes: {},
 };
 
 export default function App() {
@@ -83,14 +85,28 @@ export default function App() {
         const cur = patternStats[pat] || { exposure: 0, correct: 0 };
         patternStats[pat] = { exposure: cur.exposure + 1, correct: cur.correct + (pct >= 60 ? 1 : 0) };
       }
+      const entry = {
+        id: problemId,
+        title: activeProblem?.title,
+        pattern: pat,
+        difficulty: activeProblem?.difficulty,
+        score: pct,
+        timestamp: Date.now(),
+        date: new Date().toDateString(),
+      };
       return {
         ...prev,
         completed: { ...prev.completed, [problemId]: { score: pct, timestamp: Date.now(), date: new Date().toDateString() } },
         patternStats,
+        sessionHistory: [entry, ...(prev.sessionHistory || [])].slice(0, 20),
       };
     });
     setScreen("results");
   }, [activeProblem]);
+
+  const handleNote = useCallback((problemId, text) => {
+    setState(prev => ({ ...prev, notes: { ...prev.notes, [problemId]: text } }));
+  }, []);
 
   return (
     <div>
@@ -116,6 +132,8 @@ export default function App() {
           scores={activeScores}
           completed={state.completed}
           simMode={simMode}
+          note={state.notes?.[activeProblem.id] || ""}
+          onNote={handleNote}
           onRetry={() => startProblem(activeProblem, simMode)}
           onHome={() => setScreen("home")}
         />

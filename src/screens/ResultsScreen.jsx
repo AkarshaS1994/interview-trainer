@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { ProgressBar } from "../components/ProgressBar.jsx";
 
 const DIFF_COLOR = { Easy: "#22c55e", Medium: "#f59e0b", Hard: "#ef4444" };
 
-export function ResultsScreen({ problem, scores, completed, simMode, onRetry, onHome }) {
+export function ResultsScreen({ problem, scores, completed, simMode, note, onNote, onRetry, onHome }) {
+  const [noteText, setNoteText] = useState(note || "");
   const pct = completed[problem.id]?.score ?? 0;
   const grade = pct >= 80
     ? { label: "Interview Ready", color: "#22c55e", emoji: "🎯" }
@@ -70,6 +72,23 @@ export function ResultsScreen({ problem, scores, completed, simMode, onRetry, on
           <span style={{ fontSize: 12, color: "#475569" }}>Time: <strong style={{ color: "#a5b4fc" }}>{problem.solution.time}</strong></span>
           <span style={{ fontSize: 12, color: "#475569" }}>Space: <strong style={{ color: "#a5b4fc" }}>{problem.solution.space}</strong></span>
         </div>
+      </div>
+
+      {/* Notes */}
+      <div style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📝 My Notes</div>
+        <textarea
+          value={noteText}
+          onChange={e => { setNoteText(e.target.value); onNote(problem.id, e.target.value); }}
+          placeholder="What tripped you up? What would you do differently?"
+          rows={3}
+          style={{
+            width: "100%", background: "#0d0d14", border: "1px solid #1e1e2e", borderRadius: 8,
+            color: "#e2e8f0", fontSize: 13, padding: "10px 12px", resize: "vertical",
+            fontFamily: "system-ui,sans-serif", lineHeight: 1.5, boxSizing: "border-box",
+            outline: "none",
+          }}
+        />
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
