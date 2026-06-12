@@ -13,7 +13,7 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
 
   const toggle = () => {
     if (listening) {
-      recognitionRef.current?.stop();
+      recognitionRef.current?.stop(); // calls our wrapper's stop() → sets active=false
       setListening(false);
       return;
     }
@@ -46,7 +46,7 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
 
     if (!r) { setError("Voice not supported on this browser."); return; }
     recognitionRef.current = r;
-    r.start();
+    // r starts itself internally (continuous=false + auto-restart pattern)
     setListening(true);
   };
 
