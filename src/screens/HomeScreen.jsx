@@ -12,13 +12,14 @@ const DAILY_GOAL = 3;
 
 const HOME = { level: "home", category: null, type: null, pattern: null };
 
-export function HomeScreen({ state, problems, onStart }) {
+export function HomeScreen({ state, problems, onStart, onSetXP }) {
   const [tab, setTab]             = useState("problems");
   const [filterDiff, setFilterDiff]       = useState("All");
   const [filterCompany, setFilterCompany] = useState("All");
   const [browse, setBrowse]       = useState(HOME);
   const [searchQuery, setSearchQuery]     = useState("");
   const [showShareCard, setShowShareCard] = useState(false);
+  const [showLevelPicker, setShowLevelPicker] = useState(false);
 
   const { xp, badges, completed, patternStats, daysPracticed, stepStreak, sessionHistory = [], notes = {} } = state;
   const lvl     = computeLevel(xp);
@@ -82,11 +83,14 @@ export function HomeScreen({ state, problems, onStart }) {
   };
 
   const browsedProblems = browse.level === "problems"
-    ? unlocked.filter(p =>
+    ? problems
+      .filter(p =>
         p.pattern === browse.pattern &&
         (filterDiff === "All" || p.difficulty === filterDiff) &&
         (filterCompany === "All" || p.companies.includes(filterCompany))
       )
+      .map(p => ({ ...p, locked: !lvl.unlockedDifficulties.includes(p.difficulty) }))
+      .sort((a, b) => Number(a.locked) - Number(b.locked))
     : [];
 
   const searchResults = searchQuery.trim().length > 0
@@ -94,6 +98,7 @@ export function HomeScreen({ state, problems, onStart }) {
     : [];
 
   const countFor = (patterns) => unlocked.filter(p => patterns.includes(p.pattern)).length;
+  const totalFor = (patterns) => problems.filter(p => patterns.includes(p.pattern)).length;
   const isDue = (p) => due.find(x => x.id === p.id);
 
   // ── Share card text ───────────────────────────────────────────────────────
@@ -206,7 +211,7 @@ export function HomeScreen({ state, problems, onStart }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {DSA_TAXONOMY.map(cat => {
           const allPatterns = cat.types.flatMap(t => t.patterns);
-          const total = countFor(allPatterns);
+          const total = totalFor(allPatterns);
           const done  = unlocked.filter(p => allPatterns.includes(p.pattern) && completed[p.id]).length;
           return (
             <div key={cat.id} onClick={() => setBrowse({ level: "type", category: cat, type: null, pattern: null })}
@@ -249,9 +254,10 @@ export function HomeScreen({ state, problems, onStart }) {
       <div style={{ fontSize: 12, color: "#475569", marginBottom: 16 }}>{browse.category.description}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {browse.category.types.map(type => {
-          const total  = countFor(type.patterns);
-          const done   = unlocked.filter(p => type.patterns.includes(p.pattern) && completed[p.id]).length;
-          const locked = problems.filter(p => type.patterns.includes(p.pattern)).length - total;
+          const total     = totalFor(type.patterns);
+          const openCount = countFor(type.patterns);
+          const done      = unlocked.filter(p => type.patterns.includes(p.pattern) && completed[p.id]).length;
+          const locked    = total - openCount;
           return (
             <div key={type.id} onClick={() => selectType(type)}
               style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}
@@ -274,14 +280,14 @@ export function HomeScreen({ state, problems, onStart }) {
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                   {type.patterns.map(pat => (
                     <span key={pat} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, background: "#1e1e2e", color: "#818cf8", fontWeight: 600 }}>
-                      {pat} ({unlocked.filter(p => p.pattern === pat).length})
+                      {pat} ({problems.filter(p => p.pattern === pat).length})
                     </span>
                   ))}
                 </div>
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1 }}><ProgressBar value={done} max={Math.max(total, 1)} color={browse.category.color} /></div>
-                <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{done}/{total}</span>
+                <div style={{ flex: 1 }}><ProgressBar value={done} max={Math.max(openCount, 1)} color={browse.category.color} /></div>
+                <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{done}/{openCount}</span>
                 <span style={{ fontSize: 16, color: "#2d2d4e" }}>›</span>
               </div>
             </div>
@@ -305,9 +311,11 @@ export function HomeScreen({ state, problems, onStart }) {
         <div style={{ fontSize: 12, color: "#475569", marginBottom: 16 }}>{type.description}</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {type.patterns.map(pat => {
-            const total = unlocked.filter(p => p.pattern === pat).length;
-            const done  = unlocked.filter(p => p.pattern === pat && completed[p.id]).length;
-            const diffs = ["Easy","Medium","Hard"].map(d => unlocked.filter(p => p.pattern === pat && p.difficulty === d).length);
+            const total        = problems.filter(p => p.pattern === pat).length;
+            const openCount    = unlocked.filter(p => p.pattern === pat).length;
+            const done         = unlocked.filter(p => p.pattern === pat && completed[p.id]).length;
+            const diffs        = ["Easy","Medium","Hard"].map(d => problems.filter(p => p.pattern === pat && p.difficulty === d).length);
+            const unlockedDiffs = ["Easy","Medium","Hard"].map(d => unlocked.filter(p => p.pattern === pat && p.difficulty === d).length);
             return (
               <div key={pat} onClick={() => { setBrowse({ ...browse, level: "problems", pattern: pat }); setFilterDiff("All"); setFilterCompany("All"); }}
                 style={{ background: "#111118", border: "1px solid #1a1a2e", borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}
@@ -321,12 +329,20 @@ export function HomeScreen({ state, problems, onStart }) {
                 </div>
                 <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                   {[["Easy","#22c55e"],["Medium","#f59e0b"],["Hard","#ef4444"]].map(([d, c], i) => diffs[i] > 0 ? (
-                    <span key={d} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5, background: DIFF_BG[d], color: c }}>{d[0]} {diffs[i]}</span>
+                    <span key={d} style={{
+                      fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5,
+                      background: unlockedDiffs[i] > 0 ? DIFF_BG[d] : "#0d0d14",
+                      color: unlockedDiffs[i] > 0 ? c : "#475569",
+                    }}>
+                      {unlockedDiffs[i] === 0 && "🔒 "}{d[0]} {diffs[i]}
+                    </span>
                   ) : null)}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1 }}><ProgressBar value={done} max={Math.max(total, 1)} color={cat.color} /></div>
-                  <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{done}/{total}</span>
+                  <div style={{ flex: 1 }}><ProgressBar value={done} max={Math.max(openCount, 1)} color={cat.color} /></div>
+                  <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>
+                    {done}/{openCount}{openCount < total ? ` · 🔒 ${total - openCount}` : ""}
+                  </span>
                 </div>
               </div>
             );
@@ -338,19 +354,23 @@ export function HomeScreen({ state, problems, onStart }) {
 
   // ── Level 4: Problem list ─────────────────────────────────────────────────
   const ProblemsView = () => {
-    const totalInPattern = unlocked.filter(p => p.pattern === browse.pattern).length;
-    const doneInPattern  = unlocked.filter(p => p.pattern === browse.pattern && completed[p.id]).length;
+    const allInPattern      = problems.filter(p => p.pattern === browse.pattern).length;
+    const unlockedInPattern = unlocked.filter(p => p.pattern === browse.pattern).length;
+    const lockedInPattern   = allInPattern - unlockedInPattern;
+    const doneInPattern     = unlocked.filter(p => p.pattern === browse.pattern && completed[p.id]).length;
     return (
       <div>
         <BackRow label={browse.type?.patterns.length > 1 ? browse.pattern : browse.type?.label || "Back"} />
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9" }}>{browse.pattern}</span>
-            <span style={{ fontSize: 12, color: "#475569" }}>{totalInPattern} problems</span>
+            <span style={{ fontSize: 12, color: "#475569" }}>
+              {allInPattern} problems{lockedInPattern > 0 ? ` · ${lockedInPattern} locked` : ""}
+            </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ flex: 1 }}><ProgressBar value={doneInPattern} max={Math.max(totalInPattern, 1)} color={browse.category?.color || "#6366f1"} /></div>
-            <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{doneInPattern}/{totalInPattern} done</span>
+            <div style={{ flex: 1 }}><ProgressBar value={doneInPattern} max={Math.max(unlockedInPattern, 1)} color={browse.category?.color || "#6366f1"} /></div>
+            <span style={{ fontSize: 10, color: "#475569", flexShrink: 0 }}>{doneInPattern}/{unlockedInPattern} done</span>
           </div>
         </div>
 
@@ -382,36 +402,43 @@ export function HomeScreen({ state, problems, onStart }) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {browsedProblems.map(p => {
-            const done = completed[p.id];
-            const due_ = isDue(p);
-            const hasNote = notes[p.id]?.trim().length > 0;
+            const done    = !p.locked && completed[p.id];
+            const due_    = !p.locked && isDue(p);
+            const hasNote = !p.locked && notes[p.id]?.trim().length > 0;
+            const unlockLvl = p.difficulty === "Hard" ? 5 : p.difficulty === "Medium" ? 3 : 1;
             return (
-              <div key={p.id} onClick={() => onStart(p)} style={{
-                background: "#111118",
-                border: `1px solid ${done ? (due_ ? "#f59e0b20" : "#22c55e20") : "#1a1a2e"}`,
-                borderRadius: 12, padding: "14px 16px", cursor: "pointer",
+              <div key={p.id} onClick={() => !p.locked && onStart(p)} style={{
+                background: p.locked ? "#0a0a12" : "#111118",
+                border: `1px solid ${p.locked ? "#1a1a2e30" : done ? (due_ ? "#f59e0b20" : "#22c55e20") : "#1a1a2e"}`,
+                borderRadius: 12, padding: "14px 16px",
+                cursor: p.locked ? "default" : "pointer",
+                opacity: p.locked ? 0.5 : 1,
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 5 }}>
-                      <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 15 }}>{p.title}</span>
+                      {p.locked && <span style={{ fontSize: 13 }}>🔒</span>}
+                      <span style={{ fontWeight: 700, color: p.locked ? "#475569" : "#f1f5f9", fontSize: 15 }}>{p.title}</span>
                       {done && <span style={{ fontSize: 11, color: done.score >= 80 ? "#22c55e" : "#f59e0b", fontWeight: 700 }}>✓ {done.score}%</span>}
                       {due_ && <span style={{ fontSize: 10, color: "#f59e0b", background: "#1a1000", border: "1px solid #f59e0b40", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Review</span>}
                       {hasNote && <span style={{ fontSize: 11 }} title="Has notes">📝</span>}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, background: DIFF_BG[p.difficulty], color: DIFF_COLOR[p.difficulty] }}>{p.difficulty}</span>
-                      {p.companies.slice(0, 2).map(c => <span key={c} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, background: "#0f1015", color: "#475569" }}>{c}</span>)}
+                      {p.locked
+                        ? <span style={{ fontSize: 10, color: "#334155" }}>Reach Level {unlockLvl} to unlock</span>
+                        : p.companies.slice(0, 2).map(c => <span key={c} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, background: "#0f1015", color: "#475569" }}>{c}</span>)
+                      }
                     </div>
                   </div>
-                  <span style={{ color: "#2d2d4e", fontSize: 18, marginLeft: 8 }}>›</span>
+                  {!p.locked && <span style={{ color: "#2d2d4e", fontSize: 18, marginLeft: 8 }}>›</span>}
                 </div>
               </div>
             );
           })}
           {browsedProblems.length === 0 && (
             <div style={{ textAlign: "center", padding: "32px 0", color: "#334155", fontSize: 14 }}>
-              No {filterDiff !== "All" ? filterDiff : ""}{filterCompany !== "All" ? ` ${filterCompany}` : ""} problems unlocked here yet.
+              No problems match these filters.
             </div>
           )}
         </div>
@@ -482,10 +509,50 @@ export function HomeScreen({ state, problems, onStart }) {
     );
   };
 
+  // ── Level picker modal ────────────────────────────────────────────────────
+  const LEVEL_OPTIONS = [
+    { label: "Beginner",    sub: "Start fresh · Easy problems only",        xp: 0   },
+    { label: "Junior",      sub: "Level 3 · Medium problems unlocked",      xp: 120 },
+    { label: "Intermediate",sub: "Level 4 · Medium problems unlocked",      xp: 250 },
+    { label: "Advanced",    sub: "Level 5 · Hard problems unlocked",        xp: 450 },
+  ];
+  const LevelPickerModal = () => (
+    <div onClick={() => setShowLevelPicker(false)} style={{
+      position: "fixed", inset: 0, background: "#00000090", zIndex: 100,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#0f0f1e", border: "1px solid #1e1e3e", borderRadius: 20, padding: 24,
+        maxWidth: 340, width: "100%",
+      }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#f1f5f9", marginBottom: 4 }}>Choose Your Level</div>
+        <div style={{ fontSize: 12, color: "#475569", marginBottom: 16 }}>
+          Select your experience level. This sets your starting XP and unlocks the appropriate problems.
+        </div>
+        {LEVEL_OPTIONS.map(opt => (
+          <button key={opt.label} onClick={() => { onSetXP(opt.xp); setShowLevelPicker(false); }} style={{
+            display: "block", width: "100%", textAlign: "left",
+            background: xp >= opt.xp && (LEVEL_OPTIONS.find((_, i, arr) => i < arr.length - 1 && arr[i].xp === opt.xp) ? xp < LEVEL_OPTIONS[LEVEL_OPTIONS.indexOf(opt) + 1]?.xp : true) ? "#1a1a2e" : "#111118",
+            border: "1px solid #1e1e2e", borderRadius: 10, padding: "12px 14px", marginBottom: 8,
+            cursor: "pointer", color: "#e2e8f0",
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#a5b4fc" }}>{opt.label}</div>
+            <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{opt.sub}</div>
+          </button>
+        ))}
+        <button onClick={() => setShowLevelPicker(false)} style={{
+          width: "100%", padding: "11px", background: "#1e1e2e", border: "1px solid #2d2d4e",
+          borderRadius: 10, color: "#475569", fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 4,
+        }}>Cancel</button>
+      </div>
+    </div>
+  );
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background: "#07070f", minHeight: "100vh", color: "#e2e8f0", fontFamily: "system-ui,sans-serif", paddingBottom: 80 }}>
       {showShareCard && <ShareCard />}
+      {showLevelPicker && onSetXP && <LevelPickerModal />}
 
       {/* Header */}
       <div style={{ background: "linear-gradient(180deg,#0f0f1e,#07070f)", padding: "28px 20px 16px", borderBottom: "1px solid #1a1a2e" }}>
@@ -497,9 +564,17 @@ export function HomeScreen({ state, problems, onStart }) {
 
         {/* Level + XP */}
         <div style={{ marginTop: 14, background: "#111118", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: lvl.color }}>Level {lvl.level} · {lvl.label}</span>
-            <span style={{ fontSize: 12, color: "#475569" }}>{xp} XP</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "#475569" }}>{xp} XP</span>
+              {onSetXP && (
+                <button onClick={() => setShowLevelPicker(true)} style={{
+                  fontSize: 10, padding: "3px 8px", borderRadius: 6, cursor: "pointer",
+                  background: "#1e1e2e", border: "1px solid #2d2d4e", color: "#6366f1", fontWeight: 600,
+                }}>Set Level</button>
+              )}
+            </div>
           </div>
           <ProgressBar value={lvl.xpCurrent} max={lvl.xpNeeded} color={lvl.color} />
           {lvl.level < 7 && (

@@ -108,11 +108,15 @@ export default function App() {
     setState(prev => ({ ...prev, notes: { ...prev.notes, [problemId]: text } }));
   }, []);
 
+  const handleSetXP = useCallback((amount) => {
+    setState(prev => ({ ...prev, xp: amount }));
+  }, []);
+
   return (
     <div>
       <Toast toast={toast} />
       {screen === "home" && (
-        <HomeScreen state={state} problems={ALL_PROBLEMS} onStart={startProblem} />
+        <HomeScreen state={state} problems={ALL_PROBLEMS} onStart={startProblem} onSetXP={handleSetXP} />
       )}
       {screen === "problem" && activeProblem && (
         <ProblemScreen
