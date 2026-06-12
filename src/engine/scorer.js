@@ -19,11 +19,35 @@ const COACHING = {
   edge:        "List at least two concrete edge cases with example inputs (e.g. empty array, single element, duplicates).",
 };
 
+// Convert spoken Big O phrases into notation so keyword matching works.
+// e.g. "o of n" → "O(n)", "big o of n squared" → "O(n^2)"
+function normalizeForScoring(text) {
+  return text
+    .replace(/\b(?:big\s+)?o(?:h)?\s+(?:of\s+)?n\s+squared\b/gi,  "O(n^2) O(n²)")
+    .replace(/\b(?:big\s+)?o(?:h)?\s+(?:of\s+)?n\s+log\s+n\b/gi,  "O(n log n) O(nlogn)")
+    .replace(/\b(?:big\s+)?o(?:h)?\s+(?:of\s+)?log\s+n\b/gi,      "O(log n) O(logn)")
+    .replace(/\b(?:big\s+)?o(?:h)?\s+(?:of\s+)?m\s*n\b/gi,        "O(mn) O(m*n)")
+    .replace(/\b(?:big\s+)?o(?:h)?\s+(?:of\s+)?n\b/gi,            "O(n)")
+    .replace(/\b(?:big\s+)?o(?:h)?\s+(?:of\s+)?(?:1|one)\b/gi,    "O(1)")
+    .replace(/\border\s+(?:of\s+)?n\s+squared\b/gi,               "O(n^2)")
+    .replace(/\border\s+(?:of\s+)?n\s+log\s+n\b/gi,               "O(n log n)")
+    .replace(/\border\s+(?:of\s+)?log\s+n\b/gi,                   "O(log n)")
+    .replace(/\border\s+(?:of\s+)?n\b/gi,                         "O(n)")
+    .replace(/\border\s+(?:of\s+)?(?:1|one)\b/gi,                 "O(1)")
+    // "n squared" without explicit O — still useful for keywords like "n^2"
+    .replace(/\bn\s+squared\b/gi, "n^2 n²")
+    // two-word variants that keywords check as single strings
+    .replace(/\bhash\s+map\b/gi,      "hash map hashmap")
+    .replace(/\btwo\s+pointer\b/gi,   "two pointer two pointers")
+    .replace(/\bunion\s+find\b/gi,    "union find union-find");
+}
+
 export function scoreStep(text, stepId, problem = null) {
   if (!text || typeof text !== "string") {
     return { score: 0, passed: false, feedback: "No answer provided.", matched: [], topMissed: [] };
   }
-  const lower = text.toLowerCase();
+  const normalized = normalizeForScoring(text);
+  const lower = normalized.toLowerCase();
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   if (words < 10) {
     return { score: 0, passed: false, feedback: "Too brief — explain your reasoning fully. Think out loud.", matched: [], topMissed: [] };

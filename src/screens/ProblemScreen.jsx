@@ -219,8 +219,8 @@ export function ProblemScreen({ problem, simMode, state, onComplete, onBack, onA
               </div>
             )}
 
-            {/* Answer input */}
-            <VoiceInput value={input} onChange={setInput} disabled={submitted} />
+            {/* Answer input — key forces remount on each step, killing any active mic */}
+            <VoiceInput key={stepIdx} value={input} onChange={setInput} disabled={submitted} />
             {!submitted && (
               <button onClick={submitStep} disabled={!input.trim()} style={{
                 marginTop: 10, width: "100%", padding: "13px",

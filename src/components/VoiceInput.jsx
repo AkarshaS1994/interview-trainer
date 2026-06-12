@@ -6,26 +6,32 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
   const [error, setError] = useState(null);
   const [supported] = useState(() => isVoiceSupported());
   const recognitionRef = useRef(null);
-  // Save whatever text existed before recording started so we can prepend it.
   const baseTextRef = useRef("");
 
+  // Stop mic on unmount (step change via key prop, or phase change)
   useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  // Auto-stop when parent disables the input (answer submitted)
+  useEffect(() => {
+    if (disabled && listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+    }
+  }, [disabled]);
 
   const toggle = () => {
     if (listening) {
-      recognitionRef.current?.stop(); // calls our wrapper's stop() → sets active=false
+      recognitionRef.current?.stop();
       setListening(false);
       return;
     }
 
     setError(null);
-    // Capture current text as the base; voice transcript is appended after it.
     baseTextRef.current = value ? value.trimEnd() : "";
 
     const r = createRecognition({
       onResult: ({ finalText, interimText }) => {
         const base = baseTextRef.current;
-        // Replace the whole value each time: base + accumulated finals + live interim marker.
         onChange(
           (base ? base + " " : "") +
           finalText +
@@ -35,7 +41,6 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
       onEnd: (finalText) => {
         setListening(false);
         const base = baseTextRef.current;
-        // Strip interim marker and set final clean value.
         onChange(((base ? base + " " : "") + finalText).trimEnd());
       },
       onError: (msg) => {
@@ -46,12 +51,8 @@ export function VoiceInput({ value, onChange, disabled, placeholder }) {
 
     if (!r) { setError("Voice not supported on this browser."); return; }
     recognitionRef.current = r;
-    // r starts itself internally (continuous=false + auto-restart pattern)
     setListening(true);
   };
-
-  const stop = () => { recognitionRef.current?.stop(); setListening(false); };
-  VoiceInput.stop = stop;
 
   return (
     <div>
