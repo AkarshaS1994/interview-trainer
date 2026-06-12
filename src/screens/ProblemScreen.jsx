@@ -55,7 +55,7 @@ export function ProblemScreen({ problem, simMode, state, onComplete, onBack, onA
     const result = scoreStep(input, step.id, problem);
     const newScores = { ...scores, [step.id]: result.score };
     setScores(newScores);
-    setFeedbacks(prev => ({ ...prev, [step.id]: result.feedback }));
+    setFeedbacks(prev => ({ ...prev, [step.id]: result }));
     setSubmitted(true);
     onXP(result.score);
     const newStreak = result.passed ? state.stepStreak + 1 : 0;
@@ -240,15 +240,55 @@ export function ProblemScreen({ problem, simMode, state, onComplete, onBack, onA
             {/* Feedback */}
             {submitted && !whySubmitted && (() => {
               const sc = scores[step.id] ?? 0;
+              const result = feedbacks[step.id] || {};
+              const feedback = result.feedback || "";
+              const matched = result.matched || [];
+              const topMissed = result.topMissed || [];
+              const accent = sc >= 7 ? "#22c55e" : sc >= 4 ? "#f59e0b" : "#ef4444";
+              const bg     = sc >= 7 ? "#052e16"  : sc >= 4 ? "#1c1400"  : "#1c0000";
               return (
-                <div style={{ marginTop: 10, background: sc >= 7 ? "#052e16" : sc >= 4 ? "#1c1400" : "#1c0000", border: `1px solid ${sc >= 7 ? "#22c55e30" : sc >= 4 ? "#f59e0b30" : "#ef444430"}`, borderRadius: 10, padding: "12px 14px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700, color: sc >= 7 ? "#22c55e" : sc >= 4 ? "#f59e0b" : "#ef4444", fontSize: 14 }}>
+                <div style={{ marginTop: 10, background: bg, border: `1px solid ${accent}25`, borderRadius: 10, padding: "12px 14px" }}>
+                  {/* Score header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 700, color: accent, fontSize: 14 }}>
                       {sc >= 7 ? "✓ Strong" : sc >= 4 ? "~ Partial" : "✗ Needs depth"}
                     </span>
-                    <span style={{ color: "#94a3b8", fontWeight: 700 }}>{sc}/10</span>
+                    <span style={{ color: "#94a3b8", fontWeight: 700, fontSize: 13 }}>{sc}/10</span>
                   </div>
-                  <div style={{ fontSize: 13, color: "#94a3b8" }}>{feedbacks[step.id]}</div>
+                  {/* Coaching message */}
+                  <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6, marginBottom: matched.length > 0 ? 10 : 0 }}>
+                    {feedback}
+                  </div>
+                  {/* Matched concepts */}
+                  {matched.length > 0 && (
+                    <div style={{ marginBottom: topMissed.length > 0 ? 10 : 0 }}>
+                      <div style={{ fontSize: 10, color: "#22c55e", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+                        ✅ Concepts you covered
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                        {matched.map(k => (
+                          <span key={k} style={{ background: "#031a0e", border: "1px solid #22c55e35", color: "#4ade80", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontFamily: "ui-monospace,monospace" }}>
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Missed concepts */}
+                  {topMissed.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+                        ⚠️ Key concepts to add
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                        {topMissed.map(k => (
+                          <span key={k} style={{ background: "#130e00", border: "1px solid #f59e0b35", color: "#fbbf24", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontFamily: "ui-monospace,monospace" }}>
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}

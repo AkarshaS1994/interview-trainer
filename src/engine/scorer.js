@@ -8,18 +8,37 @@ const KEYWORDS = {
   edge:        ["empty","null","single","duplicate","negative","zero","large","equal","same","one","none","all","overflow","boundary","cycle","self","loop","disconnected","balanced"],
 };
 
+// Step-specific coaching shown when answer is partial or weak
+const COACHING = {
+  understand:  "Restate the input/output, name the data structure, and walk through a concrete example.",
+  brute:       "Describe the naive approach step by step, state its time complexity, and explain why it's too slow.",
+  pattern:     "Name the exact pattern (e.g. 'two pointers', 'sliding window', 'hashmap') and explain in one sentence why it fits.",
+  algorithm:   "Walk through initialization, the loop logic, and what you return — like pseudocode spoken aloud.",
+  tradeoff:    "Compare time vs. space with Big-O values and explain what you'd pick in a real interview and why.",
+  complexity:  "State time complexity AND space complexity with a one-line justification for each.",
+  edge:        "List at least two concrete edge cases with example inputs (e.g. empty array, single element, duplicates).",
+};
+
 export function scoreStep(text, stepId, problem = null) {
-  if (!text || typeof text !== "string") return { score: 0, passed: false, feedback: "No answer provided." };
+  if (!text || typeof text !== "string") {
+    return { score: 0, passed: false, feedback: "No answer provided.", matched: [], topMissed: [] };
+  }
   const lower = text.toLowerCase();
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  if (words < 10) return { score: 0, passed: false, feedback: "Too brief — explain your reasoning fully. Think out loud." };
+  if (words < 10) {
+    return { score: 0, passed: false, feedback: "Too brief — explain your reasoning fully. Think out loud.", matched: [], topMissed: [] };
+  }
 
   const kws = problem?.keywords?.[stepId] || KEYWORDS[stepId] || KEYWORDS.understand;
   const matched = kws.filter(k => lower.includes(k.toLowerCase()));
+  const missed   = kws.filter(k => !lower.includes(k.toLowerCase()));
+  const topMissed = missed.slice(0, 5);
   const ratio = matched.length / Math.max(kws.length, 1);
 
-  if (ratio >= 0.40) return { score: 10, passed: true,  feedback: "Strong reasoning. Key concepts well covered." };
-  if (ratio >= 0.22) return { score: 7,  passed: true,  feedback: `Good start. Go deeper on the ${stepId} aspect.` };
-  if (ratio >= 0.10) return { score: 4,  passed: false, feedback: `Partial. Be more specific about ${stepId}.` };
-  return                     { score: 1,  passed: false, feedback: `Needs more depth. Think carefully about: ${stepId}.` };
+  const coaching = COACHING[stepId] || "Be more specific and technical in your explanation.";
+
+  if (ratio >= 0.40) return { score: 10, passed: true,  feedback: "Strong answer — you hit the key concepts.", matched, topMissed };
+  if (ratio >= 0.22) return { score: 7,  passed: true,  feedback: coaching, matched, topMissed };
+  if (ratio >= 0.10) return { score: 4,  passed: false, feedback: coaching, matched, topMissed };
+  return                    { score: 1,  passed: false, feedback: coaching, matched, topMissed };
 }
