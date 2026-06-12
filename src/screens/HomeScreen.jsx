@@ -21,8 +21,6 @@ export function HomeScreen({ state, problems, onStart }) {
   const due  = getDueForReview(completed, problems);
   const unlocked = problems.filter(p => lvl.unlockedDifficulties.includes(p.difficulty));
 
-  const patternList = [...new Set(problems.map(p => p.pattern))].sort();
-
   const weakestPattern = (() => {
     let worst = null, worstAcc = 2;
     Object.entries(patternStats).forEach(([pat, s]) => {
@@ -166,7 +164,7 @@ export function HomeScreen({ state, problems, onStart }) {
                 </div>
               </div>
               <div style={{ marginTop: 12 }}>
-                <ProgressBar value={done} max={total} color={cat.color} />
+                <ProgressBar value={done} max={Math.max(total, 1)} color={cat.color} />
               </div>
             </div>
           );
